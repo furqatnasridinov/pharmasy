@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useFavorites } from '../context/FavoritesContext'
+import { plural } from '../utils/format'
 import { MedicineBadges } from './Badges'
 import CartButton from './CartButton'
 import { HeartIcon } from './Icons'
@@ -7,43 +8,62 @@ import MedicineImage from './MedicineImage'
 import Price from './Price'
 import StarRating from './StarRating'
 
-const STOCK_SCALE = 100 // остаток, при котором полоска заполнена полностью
-
-function StockMeter({ medicine: m }) {
-  if (m.expiry_status === 'expired') return <div className="meter"><span>Недоступно для заказа</span><i style={{ '--w': '0%' }} /></div>
-  if (m.stock === 0) return <div className="meter"><span>Нет в наличии</span><i style={{ '--w': '0%' }} /></div>
-  const low = m.stock < 5
-  return (
-    <div className={`meter ${low ? 'meter--low' : ''}`}>
-      <span>{low ? `Осталось ${m.stock} шт.` : `${m.stock} шт. на складе`}</span>
-      <i style={{ '--w': `${Math.max(6, Math.min(100, (m.stock / STOCK_SCALE) * 100))}%` }} />
-    </div>
-  )
+/** «Нурофен 200 мг №20» — как в аптечных каталогах; № только для штучных упаковок. */
+export function fullName(m) {
+  const count = /^(\d+)\s+(табл|капс|драже|пакет|свеч|ампул|флакон|доз)/.exec(m.package || '')
+  return [m.name, m.dosage, count ? `№${count[1]}` : m.package].filter(Boolean).join(' ')
 }
 
+function StockLine({ medicine: m }) {
+  if (m.expiry_status === 'expired') return <span className="stock-line stock-line--off">Недоступно: истёк срок годности</span>
+  if (m.stock === 0) return <span className="stock-line stock-line--off">Нет в наличии</span>
+  if (m.stock < 5) return <span className="stock-line stock-line--low">Осталось {m.stock} шт.</span>
+  return <span className="stock-line">В наличии</span>
+}
+
+/** Горизонтальная карточка товара в каталоге: фото — описание — цена и кнопка. */
 export default function MedicineRow({ medicine: m }) {
   const fav = useFavorites()
   const isFav = fav.isFavorite(m.id)
-  const meta = [m.form, m.dosage, m.manufacturer].filter(Boolean).join(' · ')
+  const props = [
+    ['Производитель', m.manufacturer],
+    ['Страна', m.country],
+    ['Форма выпуска', [m.form, m.dosage, m.package].filter(Boolean).join(', ')],
+    ['Действующее вещество', m.active_substance],
+  ].filter(([, v]) => v)
 
   return (
-    <article className={`row ${m.is_available ? '' : 'row--dim'}`}>
-      <Link to={`/medicines/${m.id}`} className="row__thumb"><MedicineImage src={m.image_url} alt={m.name} /></Link>
-      <div className="row__info">
-        <div className="row__name">
-          <Link to={`/medicines/${m.id}`}>{m.name}</Link>
-          <MedicineBadges medicine={m} showStock={false} showDiscount />
-        </div>
-        <div className="row__meta">{meta}</div>
-        <StarRating value={m.rating} count={m.reviews_count} size={13} />
+    <article className={`product ${m.is_available ? '' : 'product--dim'}`}>
+      <div className="product__media">
+        <Link to={`/medicines/${m.id}`}><MedicineImage src={m.image_url} alt={m.name} /></Link>
+        {m.discount_percent > 0 && <span className="off product__off">−{m.discount_percent}%</span>}
+        <button className={`fav-btn fav-btn--float ${isFav ? 'is-on' : ''}`} onClick={() => fav.toggle(m)}
+          aria-pressed={isFav} aria-label={isFav ? 'Убрать из избранного' : 'В избранное'}>
+          <HeartIcon size={17} filled={isFav} />
+        </button>
       </div>
-      <StockMeter medicine={m} />
-      <div className="row__price"><Price medicine={m} muted={!m.is_available} /></div>
-      <div className="row__cart"><CartButton medicine={m} block /></div>
-      <button className={`fav-btn ${isFav ? 'is-on' : ''}`} onClick={() => fav.toggle(m)}
-        aria-pressed={isFav} aria-label={isFav ? 'Убрать из избранного' : 'В избранное'}>
-        <HeartIcon size={18} filled={isFav} />
-      </button>
+
+      <div className="product__info">
+        <Link to={`/medicines/${m.id}`} className="product__name">{fullName(m)}</Link>
+        <div className="product__rating">
+          <StarRating value={m.rating} size={14} />
+          <span className="muted small">{m.reviews_count ? `${m.reviews_count} ${plural(m.reviews_count, ['отзыв', 'отзыва', 'отзывов'])}` : 'нет отзывов'}</span>
+        </div>
+        <dl className="product__props">
+          {props.map(([k, v]) => <div key={k}><dt>{k}:</dt><dd>{v}</dd></div>)}
+        </dl>
+        <div className="product__badges"><MedicineBadges medicine={m} showStock={false} /></div>
+      </div>
+
+      <div className="product__buy">
+        <span className="product__price-label">Цена</span>
+        <Price medicine={m} size="lg" muted={!m.is_available} />
+        <StockLine medicine={m} />
+        <CartButton medicine={m} block />
+        {m.active_substance && (
+          <Link className="product__analogs" to={`/catalog?substance=${encodeURIComponent(m.active_substance)}`}>Показать аналоги ›</Link>
+        )}
+      </div>
     </article>
   )
 }

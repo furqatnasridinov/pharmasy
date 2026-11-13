@@ -65,7 +65,7 @@ export default function OrderDetail() {
             <div><dt>Дата заказа</dt><dd>{formatDate(order.created_at, true)}</dd></div>
             <div><dt>Способ</dt><dd>{DELIVERY_LABEL[order.delivery_method]}</dd></div>
             <div><dt>{order.delivery_method === 'delivery' ? 'Адрес' : 'Аптека'}</dt>
-              <dd>{order.delivery_address || 'Душанбе, пр. Рудаки, 12'}</dd></div>
+              <dd>{order.delivery_address || 'Худжанд, ул. Камоли Худжанди, 12'}</dd></div>
             {order.comment && <div><dt>Комментарий</dt><dd>{order.comment}</dd></div>}
           </dl>
           {order.allowed_transitions.includes('cancelled') && (

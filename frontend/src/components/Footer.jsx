@@ -6,8 +6,8 @@ export default function Footer() {
     <footer className="footer">
       <div className="container footer__grid">
         <div>
-          <div className="logo"><LogoMark size={26} /><span>Провизор</span></div>
-          <p>Интернет-аптека в Душанбе. Учебный проект.</p>
+          <div className="logo"><LogoMark size={26} /><span>Darmon</span></div>
+          <p>Интернет-аптека в Худжанде. Учебный проект.</p>
         </div>
         <div>
           <b>Покупателям</b>
@@ -24,7 +24,7 @@ export default function Footer() {
         <div>
           <b>Контакты</b>
           <span>+992 00 000-00-00</span>
-          <span>Душанбе, пр. Рудаки, 12</span>
+          <span>Худжанд, ул. Камоли Худжанди, 12</span>
           <span>Ежедневно 8:00–22:00</span>
         </div>
         <p className="footer__warn">Имеются противопоказания. Перед применением проконсультируйтесь со специалистом.</p>

@@ -13,6 +13,16 @@ export default function Reviews() {
   const confirm = useConfirm()
   const [items, setItems] = useState(null)
   const [rating, setRating] = useState('')
+  const [editing, setEditing] = useState(null) // { id, rating, text }
+
+  const saveEdit = async () => {
+    try {
+      const updated = await adminApi.updateReview(editing.id, { rating: editing.rating, text: editing.text })
+      setItems((list) => list.map((r) => (r.id === updated.id ? updated : r)))
+      setEditing(null)
+      toast.show('Отзыв сохранён')
+    } catch (e) { toast.show(errorMessage(e), 'error') }
+  }
 
   useEffect(() => { adminApi.reviews().then(setItems).catch((e) => toast.show(errorMessage(e), 'error')) }, [toast])
 
@@ -49,9 +59,25 @@ export default function Reviews() {
                   <td className="nowrap">{formatDate(r.created_at)}</td>
                   <td><Link to={`/medicines/${r.medicine_id}`}>{r.medicine_name}</Link></td>
                   <td>{r.user_name}</td>
-                  <td><StarRating value={r.rating} size={13} /></td>
-                  <td className="muted">{r.text}</td>
-                  <td className="actions"><button className="link link--danger" onClick={() => remove(r)}>Удалить</button></td>
+                  {editing?.id === r.id ? (
+                    <>
+                      <td><StarRating value={editing.rating} onChange={(v) => setEditing({ ...editing, rating: v })} size={16} /></td>
+                      <td><textarea className="inline-input" rows={2} value={editing.text || ''} onChange={(e) => setEditing({ ...editing, text: e.target.value })} /></td>
+                      <td className="actions">
+                        <button className="link" onClick={saveEdit}>Сохранить</button>
+                        <button className="link" onClick={() => setEditing(null)}>Отмена</button>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td><StarRating value={r.rating} size={13} /></td>
+                      <td className="muted">{r.text}</td>
+                      <td className="actions">
+                        <button className="link" onClick={() => setEditing({ id: r.id, rating: r.rating, text: r.text || '' })}>Изменить</button>
+                        <button className="link link--danger" onClick={() => remove(r)}>Удалить</button>
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>

@@ -2,7 +2,8 @@ import axios from 'axios'
 
 export const TOKEN_KEY = 'pharmacy_token'
 
-const client = axios.create({ baseURL: '/api' })
+// indexes: null → массивы уходят как ?form=a&form=b (так их ждёт FastAPI)
+const client = axios.create({ baseURL: '/api', paramsSerializer: { indexes: null } })
 
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem(TOKEN_KEY)

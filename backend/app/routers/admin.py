@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import require_admin
+from app.core.security import hash_password
 from app.models import Category, Medicine, Order, OrderItem, OrderStatus, Promotion, Review, User
 from app.routers.orders import ORDER_LOAD
 from app.routers.reviews import review_out
@@ -14,6 +15,7 @@ from app.schemas.admin import DashboardOut, TopMedicine
 from app.schemas.order import OrderOut, StatusUpdate
 from app.schemas.promotion import PromotionIn, PromotionOut
 from app.schemas.review import ReviewOut
+from app.schemas.user_admin import OrderAdminUpdate, UserAdminCreate, UserAdminOut, UserAdminUpdate
 from app.services import order_service
 from app.services.medicine_service import to_out_many
 
@@ -148,3 +150,96 @@ def update_promotion(promo_id: int, data: PromotionIn, db: Session = Depends(get
 def delete_promotion(promo_id: int, db: Session = Depends(get_db)):
     db.delete(_promo_or_404(db, promo_id))
     db.commit()
+
+
+# ---------- Пользователи ----------
+
+def _user_out(db: Session, u: User) -> UserAdminOut:
+    return UserAdminOut(
+        id=u.id, email=u.email, full_name=u.full_name, phone=u.phone, role=u.role, created_at=u.created_at,
+        orders_count=db.scalar(select(func.count(Order.id)).where(Order.user_id == u.id)) or 0,
+        reviews_count=db.scalar(select(func.count(Review.id)).where(Review.user_id == u.id)) or 0,
+    )
+
+
+def _user_or_404(db: Session, user_id: int) -> User:
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
+    return user
+
+
+def _check_email_free(db: Session, email: str, exclude_id: int | None = None):
+    query = select(User).where(func.lower(User.email) == email.lower())
+    if exclude_id:
+        query = query.where(User.id != exclude_id)
+    if db.scalar(query):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Этот email уже занят другим пользователем")
+
+
+@router.get("/users", response_model=list[UserAdminOut])
+def list_users(db: Session = Depends(get_db)):
+    return [_user_out(db, u) for u in db.scalars(select(User).order_by(User.role, User.full_name)).all()]
+
+
+@router.post("/users", response_model=UserAdminOut, status_code=status.HTTP_201_CREATED)
+def create_user(data: UserAdminCreate, db: Session = Depends(get_db)):
+    _check_email_free(db, data.email)
+    user = User(email=data.email, full_name=data.full_name.strip(), phone=(data.phone or "").strip() or None,
+                role=data.role, password_hash=hash_password(data.password))
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return _user_out(db, user)
+
+
+@router.put("/users/{user_id}", response_model=UserAdminOut)
+def update_user(user_id: int, data: UserAdminUpdate, db: Session = Depends(get_db),
+                admin: User = Depends(require_admin)):
+    user = _user_or_404(db, user_id)
+    if user.id == admin.id and data.role != "admin":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нельзя снять роль администратора с самого себя")
+    _check_email_free(db, data.email, exclude_id=user.id)
+    user.email = data.email
+    user.full_name = data.full_name.strip()
+    user.phone = (data.phone or "").strip() or None
+    user.role = data.role
+    if data.new_password:
+        if len(data.new_password) < 6:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Новый пароль должен быть не короче 6 символов")
+        user.password_hash = hash_password(data.new_password)
+    db.commit()
+    db.refresh(user)
+    return _user_out(db, user)
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(user_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
+    user = _user_or_404(db, user_id)
+    if user.id == admin.id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нельзя удалить собственный аккаунт")
+    if db.scalar(select(func.count(Order.id)).where(Order.user_id == user.id)):
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "У пользователя есть заказы — удалить нельзя. Можно изменить его данные.")
+    db.delete(user)
+    db.commit()
+
+
+# ---------- Правка заказа (адрес, способ получения, комментарий) ----------
+
+@router.put("/orders/{order_id}", response_model=OrderOut)
+def edit_order(order_id: int, data: OrderAdminUpdate, db: Session = Depends(get_db)):
+    order = db.scalar(select(Order).options(*ORDER_LOAD).where(Order.id == order_id))
+    if order is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Заказ не найден")
+    if order.status in (OrderStatus.COMPLETED, OrderStatus.CANCELLED):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Завершённый или отменённый заказ изменить нельзя")
+    address = (data.delivery_address or "").strip()
+    if data.delivery_method == "delivery" and not address:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Укажите адрес доставки")
+    order.delivery_method = data.delivery_method
+    order.delivery_address = address if data.delivery_method == "delivery" else None
+    order.comment = (data.comment or "").strip() or None
+    db.commit()
+    db.refresh(order)
+    return order_service.to_out(order, "admin")

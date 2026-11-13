@@ -5,8 +5,9 @@ from app.models.order import Order, OrderItem, OrderStatus
 from app.models.favorite import Favorite
 from app.models.review import Review
 from app.models.promotion import Promotion
+from app.models.banner import Banner
 
 __all__ = [
     "User", "Category", "Medicine", "Order", "OrderItem", "OrderStatus",
-    "Favorite", "Review", "Promotion",
+    "Favorite", "Review", "Promotion", "Banner",
 ]

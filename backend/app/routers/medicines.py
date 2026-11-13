@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import require_admin
 from app.models import Category, Medicine, OrderItem
-from app.schemas.medicine import MedicineIn, MedicineOut, MedicinePage, StockUpdate
+from app.schemas.medicine import MedicineFacets, MedicineIn, MedicineOut, MedicinePage, StockUpdate
 from app.services import medicine_service as svc
 from app.services.upload_service import save_image
 
@@ -37,6 +37,10 @@ def list_medicines(
     in_stock: bool = False,
     on_sale: bool = False,
     otc_only: bool = False,
+    manufacturer: list[str] = Query(default=[]),
+    form: list[str] = Query(default=[]),
+    substance: str | None = Query(None, max_length=255),
+    exclude_id: int | None = None,
     sort: str = "name",
     page: int = Query(1, ge=1),
     page_size: int = Query(12, ge=1, le=60),
@@ -44,8 +48,15 @@ def list_medicines(
 ):
     return svc.list_medicines(
         db, search=search, category_id=category_id, min_price=min_price, max_price=max_price,
-        in_stock=in_stock, on_sale=on_sale, otc_only=otc_only, sort=sort, page=page, page_size=page_size,
+        in_stock=in_stock, on_sale=on_sale, otc_only=otc_only, manufacturers=manufacturer, forms=form,
+        substance=substance, exclude_id=exclude_id, sort=sort, page=page, page_size=page_size,
     )
+
+
+@router.get("/facets", response_model=MedicineFacets)
+def medicine_facets(category_id: int | None = None, search: str | None = Query(None, max_length=100),
+                    db: Session = Depends(get_db)):
+    return svc.facets(db, category_id=category_id, search=search)
 
 
 @router.get("/deals", response_model=list[MedicineOut])

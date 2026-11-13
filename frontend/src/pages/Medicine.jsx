@@ -110,13 +110,23 @@ export default function Medicine() {
     ['Дозировка', med.dosage],
     ['Упаковка', med.package],
     ['Производитель', med.manufacturer],
+    ['Страна', med.country],
     ['Категория', med.category_name],
     ['Срок годности', `до ${formatShortDate(med.expiry_date)}`],
   ].filter(([, v]) => v)
 
   return (
     <div className="container page medicine">
-      <Link to="/catalog" className="back-link"><ArrowLeftIcon size={18} /> Каталог</Link>
+      <div className="medicine__nav">
+        <Link to="/catalog" className="back-link"><ArrowLeftIcon size={18} /> Каталог</Link>
+        {isAdmin && (
+          <div className="admin-bar">
+            <span>Вы администратор</span>
+            <Link to={`/admin/medicines?edit=${med.id}`} className="btn btn--dark">Редактировать препарат</Link>
+            <Link to="/admin/reviews" className="btn btn--line">Отзывы</Link>
+          </div>
+        )}
+      </div>
       <div className="medicine__top">
         <div className="medicine__media">
           <MedicineImage src={med.image_url} alt={med.name} />
@@ -127,6 +137,9 @@ export default function Medicine() {
           <Link to={`/catalog?category_id=${med.category_id}`} className="medicine__cat">{med.category_name}</Link>
           <h1>{med.name}</h1>
           <p className="medicine__sub">{[med.form, med.dosage, med.package].filter(Boolean).join(' · ')}</p>
+          {med.active_substance && (
+            <Link className="product__analogs" to={`/catalog?substance=${encodeURIComponent(med.active_substance)}`}>Показать аналоги ›</Link>
+          )}
           <div className="medicine__rating">
             <StarRating value={med.rating} size={16} />
             <a href="#reviews">{med.reviews_count} {plural(med.reviews_count, ['отзыв', 'отзыва', 'отзывов'])}</a>

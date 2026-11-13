@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { categoriesApi, medicinesApi, promotionsApi } from '../api'
+import { bannersApi, categoriesApi, medicinesApi, promotionsApi } from '../api'
 import { ClockIcon, DocIcon, GridIcon, HomeIcon, SearchIcon, TruckIcon } from '../components/Icons'
+import HomeBanners from '../components/HomeBanners'
 import MedicineCard from '../components/MedicineCard'
 import PromoBanners from '../components/PromoBanners'
 import { Loader } from '../components/States'
+import { useAuth } from '../context/AuthContext'
 import { plural } from '../utils/format'
 
 function useCountdownToMidnight() {
@@ -33,15 +35,24 @@ const FAQ = [
   { q: 'Нужно ли регистрироваться?', a: 'Каталог открыт для всех. Чтобы оформить заказ, добавить препарат в избранное или оставить отзыв, нужен аккаунт — регистрация занимает минуту.' },
   { q: 'Как купить рецептурный препарат?', a: 'Рецептурные препараты отмечены бейджем «По рецепту». Оформите заказ как обычно, а рецепт врача покажите провизору при получении — без него препарат не выдадут.' },
   { q: 'Можно ли отменить заказ?', a: 'Да, пока заказ в статусе «Новый» — отмените его в разделе «Мои заказы». После того как аптека приняла заказ, отмена возможна по телефону.' },
-  { q: 'Сколько стоит доставка?', a: 'Доставка по Душанбе — 15 смн, для заказов от 200 смн — бесплатно. Самовывоз из аптеки на пр. Рудаки, 12 всегда бесплатный.' },
+  { q: 'Сколько стоит доставка?', a: 'Доставка по Худжанду — 15 смн, для заказов от 200 смн — бесплатно. Самовывоз из аптеки на ул. Камоли Худжанди, 12 всегда бесплатный.' },
 ]
 
 export default function Landing() {
+  const { user } = useAuth()
+  const guest = !user
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [data, setData] = useState({ promos: [], deals: [], hits: [], categories: [], loading: true })
   const [openFaq, setOpenFaq] = useState(0)
+  const [banners, setBanners] = useState([])
   const [h, m, s] = useCountdownToMidnight()
+
+  // Баннеры видят только вошедшие покупатели
+  useEffect(() => {
+    if (!user) { setBanners([]); return }
+    bannersApi.active().then(setBanners).catch(() => {})
+  }, [user])
 
   useEffect(() => {
     Promise.all([promotionsApi.active(), medicinesApi.deals(4), medicinesApi.bestsellers(8), categoriesApi.list()])
@@ -58,6 +69,8 @@ export default function Landing() {
 
   return (
     <div className="landing">
+      {!guest && <div className="container"><HomeBanners banners={banners} /></div>}
+{guest && (
       <section className="hero container">
         <div>
           <h1>Аптека, которая привезёт лекарства домой</h1>
@@ -69,7 +82,7 @@ export default function Landing() {
           </form>
           <div className="facts">
             <div><b>{total || '100+'}</b>{plural(total || 100, ['препарат', 'препарата', 'препаратов'])} в каталоге</div>
-            <div><b>2 часа</b>доставка по Душанбе</div>
+            <div><b>2 часа</b>доставка по Худжанду</div>
             <div><b>4,8 ★</b>средняя оценка покупателей</div>
           </div>
         </div>
@@ -90,9 +103,11 @@ export default function Landing() {
         </div>
       </section>
 
+      )}
+
       {data.loading && <Loader />}
 
-      {data.promos.length > 0 && (
+      {guest && data.promos.length > 0 && (
         <section className="section section--alt">
           <div className="container">
             <div className="section__head">
@@ -105,7 +120,7 @@ export default function Landing() {
       )}
 
       {data.deals.length > 0 && (
-        <section className="section">
+        <section className="section" id="deals">
           <div className="container">
             <div className="section__head">
               <div><h2>Выгодно сегодня</h2><p className="sub">Каждый день выбираем несколько препаратов со скидкой до полуночи.</p></div>
@@ -118,6 +133,7 @@ export default function Landing() {
         </section>
       )}
 
+{guest && (
       <section className="section section--alt">
         <div className="container">
           <h2>Всё, что нужно от аптеки, в одном месте</h2>
@@ -134,7 +150,7 @@ export default function Landing() {
                 <div><b>Отзывы</b>и рейтинг препаратов</div>
               </div>
             </div>
-            <div className="benefit"><span className="benefit__ico"><TruckIcon /></span><h3>Доставка на дом</h3><p>Курьер привезёт заказ по Душанбе в течение двух часов.</p></div>
+            <div className="benefit"><span className="benefit__ico"><TruckIcon /></span><h3>Доставка на дом</h3><p>Курьер привезёт заказ по Худжанду в течение двух часов.</p></div>
             <div className="benefit"><span className="benefit__ico"><HomeIcon /></span><h3>Самовывоз</h3><p>Заберите заказ в аптеке, как только он получит статус «Готов».</p></div>
             <div className="benefit"><span className="benefit__ico"><ClockIcon /></span><h3>Свежие сроки годности</h3><p>Просроченные препараты не попадают в продажу — система отмечает их автоматически.</p></div>
             <div className="benefit"><span className="benefit__ico"><DocIcon /></span><h3>Рецептурные препараты</h3><p>Помечены отдельно. Выдаём их только при наличии рецепта врача.</p></div>
@@ -142,7 +158,9 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="section">
+      )}
+{guest && (
+      <section className="section" id="how">
         <div className="container">
           <h2>Как оформить заказ</h2>
           <ol className="how">
@@ -154,6 +172,8 @@ export default function Landing() {
         </div>
       </section>
 
+      )}
+{guest && (
       <section className="section section--alt">
         <div className="container">
           <div className="section__head"><h2>Категории</h2><Link to="/catalog" className="btn btn--line">Открыть весь каталог</Link></div>
@@ -168,6 +188,7 @@ export default function Landing() {
         </div>
       </section>
 
+      )}
       {data.hits.length > 0 && (
         <section className="section">
           <div className="container">
@@ -180,7 +201,8 @@ export default function Landing() {
         </section>
       )}
 
-      <section className="section section--alt">
+{guest && (
+      <section className="section section--alt" id="delivery">
         <div className="container">
           <h2>Доставка и самовывоз</h2>
           <p className="sub">Способ получения выбирается при оформлении заказа.</p>
@@ -190,13 +212,15 @@ export default function Landing() {
               <ul><li>Курьер приезжает в течение 2 часов после сборки</li><li>Укажите адрес и комментарий для курьера</li><li>Оплата при получении картой или наличными</li></ul>
             </div>
             <div className="delivery__card">
-              <h3>Самовывоз из аптеки</h3><p className="pp">Бесплатно · Душанбе, пр. Рудаки, 12 · 8:00–22:00</p>
+              <h3>Самовывоз из аптеки</h3><p className="pp">Бесплатно · Худжанд, ул. Камоли Худжанди, 12 · 8:00–22:00</p>
               <ul><li>Заказ собирают за 30–40 минут</li><li>В личном кабинете статус сменится на «Готов»</li><li>Заказ хранится 3 дня</li></ul>
             </div>
           </div>
         </div>
       </section>
 
+      )}
+{guest && (
       <section className="section">
         <div className="container">
           <h2>Отзывы покупателей</h2>
@@ -212,6 +236,8 @@ export default function Landing() {
         </div>
       </section>
 
+      )}
+{guest && (
       <section className="section section--alt">
         <div className="container faq">
           <div><h2>Частые вопросы</h2><p className="sub">Не нашли ответ — позвоните нам: +992 00 000-00-00.</p></div>
@@ -228,7 +254,8 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="section">
+      )}
+      {guest && <section className="section">
         <div className="container">
           <div className="cta">
             <div><h2>Зарегистрируйтесь и закажите первые лекарства</h2><p>В личном кабинете — история заказов, статусы доставки и избранные препараты.</p></div>
@@ -238,7 +265,7 @@ export default function Landing() {
             </div>
           </div>
         </div>
-      </section>
+      </section>}
     </div>
   )
 }

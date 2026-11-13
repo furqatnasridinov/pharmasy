@@ -55,7 +55,7 @@ def create_review(
 @router.put("/api/reviews/{review_id}", response_model=ReviewOut)
 def update_review(review_id: int, data: ReviewIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     review = _get_review(db, review_id)
-    if review.user_id != user.id:
+    if review.user_id != user.id and user.role != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Можно изменять только свои отзывы")
     review.rating = data.rating
     review.text = (data.text or "").strip() or None

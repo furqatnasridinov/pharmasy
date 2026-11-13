@@ -1,27 +1,47 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { categoriesApi, medicinesApi, ordersApi, promotionsApi } from '../api'
+import { categoriesApi, medicinesApi, promotionsApi } from '../api'
 import { errorMessage } from '../api/client'
-import CartPanel from '../components/CartPanel'
 import { CloseIcon } from '../components/Icons'
 import MedicineRow from '../components/MedicineRow'
-import OrderTracker from '../components/OrderTracker'
 import Pagination from '../components/Pagination'
 import PromoBanners from '../components/PromoBanners'
 import { EmptyState, ErrorState, Loader } from '../components/States'
-import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
-import { useToast } from '../context/ToastContext'
-import { DELIVERY_LABEL, formatDate, formatPrice, greeting, plural } from '../utils/format'
+import { plural } from '../utils/format'
 
 const SORTS = [
-  { value: 'price_asc', label: 'Цена ↑' },
-  { value: 'price_desc', label: 'Цена ↓' },
-  { value: 'name', label: 'Название' },
-  { value: 'rating', label: 'Рейтинг' },
+  { value: 'rating', label: 'Сначала популярные' },
+  { value: 'newest', label: 'Сначала новые' },
+  { value: 'price_asc', label: 'Сначала дешевле' },
+  { value: 'price_desc', label: 'Сначала дороже' },
+  { value: 'name', label: 'По названию' },
+  { value: 'discount', label: 'По размеру скидки' },
 ]
-const PAGE_SIZE = 12
-const ACTIVE = ['new', 'accepted', 'ready']
+const PAGE_SIZE = 10
+const MAKERS_COLLAPSED = 8
+
+function CheckList({ title, items, selected, onToggle, collapsed }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!items.length) return null
+  const visible = collapsed && !expanded ? items.slice(0, collapsed) : items
+  return (
+    <section className="filter">
+      <h4>{title}</h4>
+      {visible.map((it) => (
+        <label key={it.name} className="filter__check">
+          <input type="checkbox" checked={selected.includes(it.name)} onChange={() => onToggle(it.name)} />
+          <span>{it.name}</span><small>{it.count}</small>
+        </label>
+      ))}
+      {collapsed && items.length > collapsed && (
+        <button className="link" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? 'Свернуть' : `Показать все (${items.length})`}
+        </button>
+      )}
+    </section>
+  )
+}
 
 function Toggle({ label, checked, onChange }) {
   return (
@@ -33,40 +53,18 @@ function Toggle({ label, checked, onChange }) {
   )
 }
 
-/** Приветствие и последний активный заказ — только для вошедшего пользователя. */
-function Greeting({ user, order }) {
-  const firstName = user.full_name.split(' ')[0]
-  return (
-    <div className="hello">
-      <div>
-        <h2>{greeting()}, {firstName}</h2>
-        {order ? (
-          <>
-            <p>Заказ №{order.id} от {formatDate(order.created_at)} · {DELIVERY_LABEL[order.delivery_method].toLowerCase()}
-              {order.delivery_address ? ` на ${order.delivery_address}` : ''} · {formatPrice(order.total_price)}</p>
-            <OrderTracker status={order.status} />
-          </>
-        ) : <p>Активных заказов нет. Найдите нужный препарат через поиск или по категориям.</p>}
-      </div>
-      {order && <Link to={`/orders/${order.id}`} className="btn btn--line">Открыть заказ</Link>}
-    </div>
-  )
-}
-
 export default function Catalog() {
-  const { user } = useAuth()
   const cart = useCart()
-  const toast = useToast()
   const [params, setParams] = useSearchParams()
   const [categories, setCategories] = useState([])
+  const [facets, setFacets] = useState(null)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [orders, setOrders] = useState([])
   const [promos, setPromos] = useState([])
   const [filtersOpen, setFiltersOpen] = useState(false)
 
-  const filters = useMemo(() => ({
+  const f = useMemo(() => ({
     search: params.get('search') || '',
     category_id: params.get('category_id') || '',
     min_price: params.get('min_price') || '',
@@ -74,169 +72,166 @@ export default function Catalog() {
     in_stock: params.get('in_stock') === 'true',
     on_sale: params.get('on_sale') === 'true',
     otc_only: params.get('otc_only') === 'true',
-    sort: params.get('sort') || 'name',
+    manufacturer: params.getAll('manufacturer'),
+    form: params.getAll('form'),
+    substance: params.get('substance') || '',
+    sort: params.get('sort') || 'rating',
     page: Number(params.get('page') || 1),
   }), [params])
 
-  const [priceDraft, setPriceDraft] = useState({ min: filters.min_price, max: filters.max_price })
-  useEffect(() => { setPriceDraft({ min: filters.min_price, max: filters.max_price }) }, [filters.min_price, filters.max_price])
+  const [priceDraft, setPriceDraft] = useState({ min: f.min_price, max: f.max_price })
+  useEffect(() => { setPriceDraft({ min: f.min_price, max: f.max_price }) }, [f.min_price, f.max_price])
 
-  /** Меняет query-параметры; любой фильтр, кроме страницы, сбрасывает на первую страницу. */
+  /** Меняет query-параметры; массивы пишутся повторяющимися ключами. Любой фильтр сбрасывает страницу. */
   const update = useCallback((changes) => {
     const next = new URLSearchParams(params)
     Object.entries(changes).forEach(([k, v]) => {
-      if (v === '' || v === false || v === null || v === undefined) next.delete(k)
-      else next.set(k, String(v))
+      next.delete(k)
+      if (Array.isArray(v)) v.forEach((x) => next.append(k, x))
+      else if (v !== '' && v !== false && v !== null && v !== undefined) next.set(k, String(v))
     })
     if (!('page' in changes)) next.delete('page')
     setParams(next)
   }, [params, setParams])
 
+  const toggleIn = (key, value) => {
+    const list = f[key]
+    update({ [key]: list.includes(value) ? list.filter((x) => x !== value) : [...list, value] })
+  }
+
   useEffect(() => { categoriesApi.list().then(setCategories).catch(() => {}) }, [])
-  useEffect(() => { if (filters.on_sale) promotionsApi.active().then(setPromos).catch(() => {}) }, [filters.on_sale])
   useEffect(() => {
-    if (!user) { setOrders([]); return }
-    ordersApi.my().then(setOrders).catch(() => {})
-  }, [user])
+    if (f.on_sale) promotionsApi.active().then(setPromos).catch(() => {})
+  }, [f.on_sale])
+  useEffect(() => {
+    const q = {}
+    if (f.category_id) q.category_id = f.category_id
+    if (f.search) q.search = f.search
+    medicinesApi.facets(q).then(setFacets).catch(() => {})
+  }, [f.category_id, f.search])
 
   const load = useCallback(() => {
     setLoading(true)
     setError('')
-    const query = { sort: filters.sort, page: filters.page, page_size: PAGE_SIZE }
-    for (const key of ['search', 'category_id', 'min_price', 'max_price']) if (filters[key]) query[key] = filters[key]
-    for (const key of ['in_stock', 'on_sale', 'otc_only']) if (filters[key]) query[key] = true
-    medicinesApi.list(query)
+    const q = { sort: f.sort, page: f.page, page_size: PAGE_SIZE }
+    for (const k of ['search', 'category_id', 'min_price', 'max_price', 'substance']) if (f[k]) q[k] = f[k]
+    for (const k of ['in_stock', 'on_sale', 'otc_only']) if (f[k]) q[k] = true
+    if (f.manufacturer.length) q.manufacturer = f.manufacturer
+    if (f.form.length) q.form = f.form
+    medicinesApi.list(q)
       .then((data) => { setResult(data); cart.refresh(data.items) })
       .catch((e) => setError(errorMessage(e)))
       .finally(() => setLoading(false))
-  }, [filters]) // eslint-disable-line react-hooks/exhaustive-deps
-
+  }, [f]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [load])
 
-  const activeOrder = orders.find((o) => ACTIVE.includes(o.status))
-  const boughtBefore = useMemo(() => {
-    const seen = new Map()
-    orders.filter((o) => o.status === 'completed').forEach((o) => o.items.forEach((i) => {
-      if (!seen.has(i.medicine_id)) seen.set(i.medicine_id, i)
-    }))
-    return [...seen.values()].slice(0, 4)
-  }, [orders])
-
-  const buyAgain = async (item) => {
-    try {
-      const med = await medicinesApi.get(item.medicine_id)
-      if (!med.is_available) return toast.show(`«${med.name}» сейчас нет в наличии`, 'info')
-      if (cart.add(med, 1)) toast.show(`«${med.name}» добавлен в корзину`)
-      else toast.show(`В наличии только ${med.stock} шт.`, 'info')
-    } catch (e) { toast.show(errorMessage(e), 'error') }
-  }
-
+  const category = categories.find((c) => String(c.id) === f.category_id)
+  const title = f.substance ? `Аналоги: ${f.substance}`
+    : f.search ? `Результаты поиска «${f.search}»`
+      : f.on_sale ? 'Акции и скидки'
+        : category?.name || 'Все препараты'
+  const hasFilters = Boolean(f.in_stock || f.otc_only || f.on_sale || f.min_price || f.max_price || f.manufacturer.length || f.form.length)
   const applyPrice = () => update({ min_price: priceDraft.min, max_price: priceDraft.max })
-  const category = categories.find((c) => String(c.id) === filters.category_id)
-  const title = filters.search ? `Поиск: «${filters.search}»` : filters.on_sale ? 'Товары со скидкой' : category?.name || 'Все препараты'
-  const totalAll = categories.reduce((s, c) => s + c.medicines_count, 0)
-
-  const chips = [
-    filters.search && { key: 'search', label: `«${filters.search}»` },
-    filters.in_stock && { key: 'in_stock', label: 'Только в наличии' },
-    filters.otc_only && { key: 'otc_only', label: 'Без рецепта' },
-    filters.on_sale && { key: 'on_sale', label: 'Со скидкой' },
-    (filters.min_price || filters.max_price) && {
-      key: 'price', label: `${filters.min_price || 0}–${filters.max_price || '∞'} смн`,
-    },
-  ].filter(Boolean)
-
-  const removeChip = (key) => (key === 'price' ? update({ min_price: '', max_price: '' }) : update({ [key]: '' }))
+  const resetFilters = () => setParams(f.category_id ? { category_id: f.category_id } : {})
 
   return (
-    <div className={`catalog ${user ? '' : 'catalog--guest'}`}>
-      <aside className={`rail ${filtersOpen ? 'is-open' : ''}`}>
-        <button className="rail__close" onClick={() => setFiltersOpen(false)} aria-label="Закрыть фильтры"><CloseIcon /></button>
-        <h4>Категории</h4>
-        <button className={`rail__cat ${!filters.category_id ? 'is-on' : ''}`} onClick={() => update({ category_id: '' })}>
-          Все препараты <span>{totalAll}</span>
-        </button>
-        {categories.map((c) => (
-          <button key={c.id} className={`rail__cat ${filters.category_id === String(c.id) ? 'is-on' : ''}`}
-            onClick={() => update({ category_id: c.id })}>
-            {c.name} <span>{c.medicines_count}</span>
-          </button>
-        ))}
-        <div className="rail__sep" />
-        <Toggle label="Только в наличии" checked={filters.in_stock} onChange={(v) => update({ in_stock: v })} />
-        <Toggle label="Без рецепта" checked={filters.otc_only} onChange={(v) => update({ otc_only: v })} />
-        <Toggle label="Со скидкой" checked={filters.on_sale} onChange={(v) => update({ on_sale: v })} />
-        <div className="rail__sep" />
-        <h4>Цена, смн</h4>
-        <form className="rail__price" onSubmit={(e) => { e.preventDefault(); applyPrice() }}>
-          <input type="number" min="0" inputMode="decimal" placeholder="от" value={priceDraft.min}
-            onChange={(e) => setPriceDraft((p) => ({ ...p, min: e.target.value }))} onBlur={applyPrice} aria-label="Цена от" />
-          <input type="number" min="0" inputMode="decimal" placeholder="до" value={priceDraft.max}
-            onChange={(e) => setPriceDraft((p) => ({ ...p, max: e.target.value }))} onBlur={applyPrice} aria-label="Цена до" />
-        </form>
-        {user && boughtBefore.length > 0 && (
-          <>
-            <div className="rail__sep" />
-            <h4>Вы уже покупали</h4>
-            <div className="again">
-              {boughtBefore.map((i) => (
-                <div key={i.medicine_id}>
-                  <span>{i.medicine_name}{i.dosage ? `, ${i.dosage}` : ''}</span>
-                  <button onClick={() => buyAgain(i)}>+ Ещё раз</button>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </aside>
+    <div className="container catalog-page">
+      <nav className="crumbs" aria-label="Хлебные крошки">
+        <Link to="/">Главная</Link><span>›</span>
+        <Link to="/catalog">Каталог</Link>
+        {category && <><span>›</span><span>{category.name}</span></>}
+        {f.on_sale && <><span>›</span><span>Акции</span></>}
+      </nav>
 
-      <section className="catalog__main">
-        {user && <Greeting user={user} order={activeOrder} />}
-        {filters.on_sale && promos.length > 0 && <PromoBanners promotions={promos} />}
-
-        <div className="catalog__head">
-          <div>
-            <h1>{title}</h1>
-            {result && <p>{result.total} {plural(result.total, ['препарат', 'препарата', 'препаратов'])}</p>}
+      <div className="catalog-layout">
+        <aside className={`filters ${filtersOpen ? 'is-open' : ''}`}>
+          <div className="filters__head">
+            <h3>Фильтры</h3>
+            <button className="icon-btn filters__close" onClick={() => setFiltersOpen(false)} aria-label="Закрыть"><CloseIcon /></button>
           </div>
-          <div className="catalog__tools">
-            <button className="btn btn--line catalog__filters-btn" onClick={() => setFiltersOpen(true)}>Фильтры</button>
-            <div className="segmented" role="group" aria-label="Сортировка">
-              {SORTS.map((s) => (
-                <button key={s.value} className={filters.sort === s.value ? 'is-on' : ''} onClick={() => update({ sort: s.value })}>{s.label}</button>
-              ))}
-            </div>
-          </div>
-        </div>
 
-        {chips.length > 0 && (
-          <div className="chips">
-            {chips.map((c) => (
-              <button key={c.key} className="chip" onClick={() => removeChip(c.key)}>{c.label} <span aria-hidden="true">✕</span></button>
+          <section className="filter">
+            <h4>Категории</h4>
+            <button className={`filter__cat ${!f.category_id ? 'is-on' : ''}`} onClick={() => update({ category_id: '', manufacturer: [], form: [] })}>
+              Все препараты
+            </button>
+            {categories.map((c) => (
+              <button key={c.id} className={`filter__cat ${f.category_id === String(c.id) ? 'is-on' : ''}`}
+                onClick={() => update({ category_id: c.id, manufacturer: [], form: [] })}>
+                {c.name} <small>{c.medicines_count}</small>
+              </button>
             ))}
-            <button className="chip chip--clear" onClick={() => setParams(filters.category_id ? { category_id: filters.category_id } : {})}>Сбросить</button>
-          </div>
-        )}
+          </section>
 
-        {loading && !result && <Loader />}
-        {error && <ErrorState text={error} onRetry={load} />}
-        {result && !error && (
-          result.items.length === 0 ? (
-            <EmptyState icon="🔍" title="Ничего не найдено"
-              text="Попробуйте изменить запрос или сбросить фильтры." action="Сбросить фильтры" onAction={() => setParams({})} />
+          <section className="filter">
+            <h4>Наличие</h4>
+            <Toggle label="Только в наличии" checked={f.in_stock} onChange={(v) => update({ in_stock: v })} />
+            <Toggle label="Без рецепта" checked={f.otc_only} onChange={(v) => update({ otc_only: v })} />
+            <Toggle label="Со скидкой" checked={f.on_sale} onChange={(v) => update({ on_sale: v })} />
+          </section>
+
+          <section className="filter">
+            <h4>Цена, смн</h4>
+            <form className="filter__price" onSubmit={(e) => { e.preventDefault(); applyPrice() }}>
+              <input type="number" min="0" placeholder={facets ? `от ${Math.floor(facets.price_min)}` : 'от'}
+                value={priceDraft.min} onChange={(e) => setPriceDraft((p) => ({ ...p, min: e.target.value }))} onBlur={applyPrice} aria-label="Цена от" />
+              <input type="number" min="0" placeholder={facets ? `до ${Math.ceil(facets.price_max)}` : 'до'}
+                value={priceDraft.max} onChange={(e) => setPriceDraft((p) => ({ ...p, max: e.target.value }))} onBlur={applyPrice} aria-label="Цена до" />
+            </form>
+          </section>
+
+          {facets && (
+            <>
+              <CheckList title="Производители" items={facets.manufacturers} selected={f.manufacturer}
+                onToggle={(v) => toggleIn('manufacturer', v)} collapsed={MAKERS_COLLAPSED} />
+              <CheckList title="Форма выпуска" items={facets.forms} selected={f.form} onToggle={(v) => toggleIn('form', v)} />
+            </>
+          )}
+
+          {hasFilters && <button className="btn btn--line btn--block" onClick={resetFilters}>Сбросить фильтры</button>}
+          <button className="btn btn--primary btn--block filters__apply" onClick={() => setFiltersOpen(false)}>
+            Показать {result ? result.total : ''}
+          </button>
+        </aside>
+
+        <section className="catalog-main">
+          {f.on_sale && promos.length > 0 && <PromoBanners promotions={promos} />}
+
+          <div className="catalog-main__head">
+            <div>
+              <h1>{title}</h1>
+              {result && <p className="muted">{result.total} {plural(result.total, ['товар', 'товара', 'товаров'])}</p>}
+            </div>
+            <div className="catalog-main__tools">
+              <button className="btn btn--line filters-btn" onClick={() => setFiltersOpen(true)}>Фильтры</button>
+              <select value={f.sort} onChange={(e) => update({ sort: e.target.value })} aria-label="Сортировка" className="sort-select">
+                {SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {f.substance && (
+            <div className="chips">
+              <button className="chip" onClick={() => update({ substance: '' })}>Действующее вещество: {f.substance} <span aria-hidden="true">✕</span></button>
+            </div>
+          )}
+
+          {loading && !result && <Loader />}
+          {error && <ErrorState text={error} onRetry={load} />}
+          {result && !error && (result.items.length === 0 ? (
+            <EmptyState icon="🔍" title="Ничего не найдено" text="Попробуйте изменить запрос или сбросить фильтры."
+              action="Сбросить фильтры" onAction={() => setParams({})} />
           ) : (
-            <div className={`rows ${loading ? 'is-loading' : ''}`}>
+            <div className={`products ${loading ? 'is-loading' : ''}`}>
               {result.items.map((m) => <MedicineRow key={m.id} medicine={m} />)}
               <div className="catalog__pager">
                 <span>Показано {(result.page - 1) * result.page_size + 1}–{Math.min(result.page * result.page_size, result.total)} из {result.total}</span>
                 <Pagination page={result.page} pages={result.pages} onChange={(p) => { update({ page: p }); window.scrollTo(0, 0) }} />
               </div>
             </div>
-          )
-        )}
-      </section>
-
-      <CartPanel />
+          ))}
+        </section>
+      </div>
     </div>
   )
 }

@@ -15,7 +15,7 @@ const FORMS = ['таблетки', 'капсулы', 'драже', 'сироп',
 const MAX_MB = 5
 
 const emptyForm = (categoryId) => ({
-  name: '', description: '', category_id: categoryId || '', manufacturer: '', active_substance: '', form: 'таблетки',
+  name: '', description: '', category_id: categoryId || '', manufacturer: '', country: '', active_substance: '', form: 'таблетки',
   dosage: '', package: '', price: '', stock: 0, expiry_date: '', requires_prescription: false, image_url: '',
   discount_percent: 0, is_deal_of_day: false,
 })
@@ -65,6 +65,7 @@ function MedicineForm({ initial, categories, onClose, onSaved }) {
       discount_percent: Number(form.discount_percent) || 0,
       description: form.description || null,
       manufacturer: form.manufacturer || null,
+      country: form.country || null,
       active_substance: form.active_substance || null,
       dosage: form.dosage || null,
       package: form.package || null,
@@ -102,6 +103,7 @@ function MedicineForm({ initial, categories, onClose, onSaved }) {
           </label>
           <label className="field"><span>Действующее вещество</span><input value={form.active_substance} onChange={set('active_substance')} /></label>
           <label className="field"><span>Производитель</span><input value={form.manufacturer} onChange={set('manufacturer')} /></label>
+          <label className="field"><span>Страна</span><input value={form.country} onChange={set('country')} placeholder="Германия" /></label>
           <label className="field"><span>Дозировка</span><input value={form.dosage} onChange={set('dosage')} placeholder="500 мг" /></label>
           <label className="field"><span>Упаковка</span><input value={form.package} onChange={set('package')} placeholder="20 таблеток" /></label>
           <label className="field"><span>Цена, смн *</span><input required type="number" min="0.01" step="0.01" value={form.price} onChange={set('price')} /></label>
@@ -152,7 +154,22 @@ export default function Medicines() {
   }, [params]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
+  const openEdit = (m) => setEditing({
+    ...emptyForm(), ...m,
+    description: m.description || '', manufacturer: m.manufacturer || '', country: m.country || '', active_substance: m.active_substance || '',
+    dosage: m.dosage || '', package: m.package || '', image_url: m.image_url || '',
+  })
   useEffect(() => { categoriesApi.list().then(setCategories).catch(() => {}) }, [])
+
+  // Ссылка «Редактировать» со страницы препарата: /admin/medicines?edit=ID
+  const editId = params.get('edit')
+  useEffect(() => {
+    if (!editId) return
+    medicinesApi.get(editId).then(openEdit).catch((e) => toast.show(errorMessage(e), 'error'))
+    const next = new URLSearchParams(params)
+    next.delete('edit')
+    setParams(next, { replace: true })
+  }, [editId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const setParam = (key, value) => {
     const next = new URLSearchParams(params)
@@ -173,11 +190,7 @@ export default function Medicines() {
     } catch (e) { toast.show(errorMessage(e), 'error') }
   }
 
-  const openEdit = (m) => setEditing({
-    ...emptyForm(), ...m,
-    description: m.description || '', manufacturer: m.manufacturer || '', active_substance: m.active_substance || '',
-    dosage: m.dosage || '', package: m.package || '', image_url: m.image_url || '',
-  })
+
 
   return (
     <div className="admin-page">

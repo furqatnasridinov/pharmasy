@@ -11,6 +11,7 @@ class MedicineIn(BaseModel):
     description: str | None = None
     category_id: int
     manufacturer: str | None = Field(default=None, max_length=255)
+    country: str | None = Field(default=None, max_length=100)
     active_substance: str | None = Field(default=None, max_length=255)
     form: str = Field(min_length=2, max_length=60)
     dosage: str | None = Field(default=None, max_length=60)
@@ -35,6 +36,7 @@ class MedicineOut(BaseModel):
     category_id: int
     category_name: str
     manufacturer: str | None
+    country: str | None
     active_substance: str | None
     form: str
     dosage: str | None
@@ -61,3 +63,15 @@ class MedicinePage(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+class FacetItem(BaseModel):
+    name: str
+    count: int
+
+
+class MedicineFacets(BaseModel):
+    manufacturers: list[FacetItem]
+    forms: list[FacetItem]
+    price_min: float
+    price_max: float

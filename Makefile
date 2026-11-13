@@ -9,8 +9,7 @@ down:    ## Остановить
 logs:    ## Логи приложения
 	docker compose logs -f
 
-reset:   ## Сбросить БД и картинки seed — при запуске данные создадутся заново
+reset:   ## Сбросить БД — при запуске данные создадутся заново
 	docker compose down
 	rm -f data/pharmacy.db
-	rm -rf data/uploads/seed
 	docker compose up -d --build

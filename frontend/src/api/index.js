@@ -19,6 +19,7 @@ export const categoriesApi = {
 export const medicinesApi = {
   list: (params) => data(client.get('/medicines', { params })),
   get: (id) => data(client.get(`/medicines/${id}`)),
+  facets: (params) => data(client.get('/medicines/facets', { params })),
   deals: (limit = 8) => data(client.get('/medicines/deals', { params: { limit } })),
   bestsellers: (limit = 8) => data(client.get('/medicines/bestsellers', { params: { limit } })),
   create: (payload) => data(client.post('/medicines', payload)),
@@ -53,6 +54,10 @@ export const ordersApi = {
   cancel: (id) => data(client.post(`/orders/${id}/cancel`)),
 }
 
+export const bannersApi = {
+  active: () => data(client.get('/banners')),
+}
+
 export const promotionsApi = {
   active: () => data(client.get('/promotions')),
 }
@@ -63,8 +68,23 @@ export const adminApi = {
   orderCounts: () => data(client.get('/admin/orders/counts')),
   setOrderStatus: (id, status) => data(client.patch(`/admin/orders/${id}/status`, { status })),
   reviews: () => data(client.get('/admin/reviews')),
+  updateReview: (id, payload) => data(client.put(`/reviews/${id}`, payload)),
+  editOrder: (id, payload) => data(client.put(`/admin/orders/${id}`, payload)),
+  users: () => data(client.get('/admin/users')),
+  createUser: (payload) => data(client.post('/admin/users', payload)),
+  updateUser: (id, payload) => data(client.put(`/admin/users/${id}`, payload)),
+  removeUser: (id) => data(client.delete(`/admin/users/${id}`)),
   promotions: () => data(client.get('/admin/promotions')),
   createPromotion: (payload) => data(client.post('/admin/promotions', payload)),
   updatePromotion: (id, payload) => data(client.put(`/admin/promotions/${id}`, payload)),
   removePromotion: (id) => data(client.delete(`/admin/promotions/${id}`)),
+  banners: () => data(client.get('/admin/banners')),
+  createBanner: (payload) => data(client.post('/admin/banners', payload)),
+  updateBanner: (id, payload) => data(client.put(`/admin/banners/${id}`, payload)),
+  removeBanner: (id) => data(client.delete(`/admin/banners/${id}`)),
+  uploadBannerImage: (id, file) => {
+    const form = new FormData()
+    form.append('file', file)
+    return data(client.post(`/admin/banners/${id}/image`, form))
+  },
 }

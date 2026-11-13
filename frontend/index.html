@@ -3,9 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Провизор — интернет-аптека в Душанбе: доставка лекарств на дом и самовывоз." />
+    <meta name="description" content="Darmon — интернет-аптека в Худжанде: доставка лекарств на дом и самовывоз." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>Провизор — аптека в Душанбе</title>
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Ставим тему до отрисовки, чтобы не было белой вспышки (логика — в src/hooks/useTheme.js)
+      try {
+        var t = localStorage.getItem('theme')
+        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
+    <title>Darmon — аптека в Худжанде</title>
   </head>
   <body>
     <div id="root"></div>

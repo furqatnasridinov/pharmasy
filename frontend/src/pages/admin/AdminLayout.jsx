@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { adminApi } from '../../api'
-import { BoxIcon, ChartIcon, FolderIcon, LogoutIcon, MenuIcon, StarIcon, TagIcon } from '../../components/Icons'
+import { BoxIcon, ChartIcon, ImageIcon, FolderIcon, GridIcon, LogoutIcon, MenuIcon, StarIcon, TagIcon, UserIcon } from '../../components/Icons'
 import { LogoMark } from '../../components/Logo'
 import { useAuth } from '../../context/AuthContext'
 import { initials } from '../../utils/format'
@@ -14,10 +14,12 @@ export const useAdmin = () => useContext(AdminContext)
 const NAV = [
   { to: '/admin', label: 'Дашборд', icon: ChartIcon, end: true },
   { to: '/admin/orders', label: 'Заказы', icon: BoxIcon, badge: true },
-  { to: '/admin/medicines', label: 'Лекарства', icon: FolderIcon },
+  { to: '/admin/medicines', label: 'Лекарства', icon: GridIcon },
   { to: '/admin/categories', label: 'Категории', icon: FolderIcon },
   { to: '/admin/promotions', label: 'Акции', icon: TagIcon },
+  { to: '/admin/banners', label: 'Баннеры', icon: ImageIcon },
   { to: '/admin/reviews', label: 'Отзывы', icon: StarIcon },
+  { to: '/admin/users', label: 'Пользователи', icon: UserIcon },
 ]
 
 export default function AdminLayout() {
@@ -41,7 +43,7 @@ export default function AdminLayout() {
     <AdminContext.Provider value={{ newOrders, refreshCounts }}>
       <div className="admin">
         <aside className={`admin__side ${open ? 'is-open' : ''}`}>
-          <Link to="/admin" className="logo logo--light"><LogoMark /><span>Провизор</span></Link>
+          <Link to="/admin" className="logo logo--light"><LogoMark /><span>Darmon</span></Link>
           <span className="admin__role">Панель администратора</span>
           <nav onClick={() => setOpen(false)}>
             {NAV.map(({ to, label, icon: Icon, end, badge }) => (
@@ -52,7 +54,7 @@ export default function AdminLayout() {
             ))}
           </nav>
           <div className="admin__foot">
-            <Link to="/" className="admin__link">← На сайт</Link>
+            <Link to="/catalog" className="admin__link">← Открыть сайт</Link>
             <div className="admin__me">
               <span className="avatar">{initials(user.full_name)}</span>
               <span><b>{user.full_name}</b><small>{user.email}</small></span>

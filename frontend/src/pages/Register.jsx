@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { errorMessage } from '../api/client'
+import { LogoMark } from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 
@@ -35,6 +36,7 @@ export default function Register() {
 
   return (
     <div className="auth-page">
+      <Link to="/" className="auth-page__logo" aria-label="На главную"><LogoMark size={36} /><span>Darmon</span></Link>
       <form className="auth-card" onSubmit={submit}>
         <h1>Регистрация</h1>
         <p className="muted">Аккаунт нужен для заказов, избранного и отзывов.</p>
@@ -55,6 +57,7 @@ export default function Register() {
         <button className="btn btn--primary btn--block btn--lg" disabled={busy}>{busy ? 'Создаём…' : 'Создать аккаунт'}</button>
         <p className="auth-card__alt">Уже есть аккаунт? <Link to="/login" state={location.state}>Войти</Link></p>
       </form>
+      <Link to="/" className="auth-page__back">← Вернуться в аптеку</Link>
     </div>
   )
 }

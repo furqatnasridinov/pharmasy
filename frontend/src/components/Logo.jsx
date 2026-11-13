@@ -13,7 +13,7 @@ export default function Logo({ to = '/' }) {
   return (
     <Link to={to} className="logo">
       <LogoMark />
-      <span>Провизор</span>
+      <span>Darmon</span>
     </Link>
   )
 }

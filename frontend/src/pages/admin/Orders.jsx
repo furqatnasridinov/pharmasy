@@ -16,6 +16,18 @@ function OrderPanel({ order, onClose, onChanged }) {
   const toast = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
+  const [edit, setEdit] = useState(null)
+  const editable = !['completed', 'cancelled'].includes(order.status)
+
+  const saveEdit = async (e) => {
+    e.preventDefault()
+    try {
+      const updated = await adminApi.editOrder(order.id, edit)
+      toast.show(`Заказ №${order.id} изменён`)
+      setEdit(null)
+      onChanged(updated)
+    } catch (err) { toast.show(errorMessage(err), 'error') }
+  }
 
   const change = async (status) => {
     if (status === 'cancelled') {
@@ -46,6 +58,33 @@ function OrderPanel({ order, onClose, onChanged }) {
         <button className="icon-btn" onClick={onClose} aria-label="Закрыть"><CloseIcon size={18} /></button>
       </div>
       <p className="muted">{formatDate(order.created_at, true)}</p>
+
+      {edit ? (
+        <form className="order-edit" onSubmit={saveEdit}>
+          <h3>Получение</h3>
+          <label className="field"><span>Способ</span>
+            <select value={edit.delivery_method} onChange={(e) => setEdit({ ...edit, delivery_method: e.target.value })}>
+              <option value="pickup">Самовывоз</option><option value="delivery">Доставка</option>
+            </select>
+          </label>
+          {edit.delivery_method === 'delivery' && (
+            <label className="field"><span>Адрес *</span>
+              <input required value={edit.delivery_address} onChange={(e) => setEdit({ ...edit, delivery_address: e.target.value })} />
+            </label>
+          )}
+          <label className="field"><span>Комментарий</span>
+            <textarea rows={2} value={edit.comment} onChange={(e) => setEdit({ ...edit, comment: e.target.value })} />
+          </label>
+          <div className="form-actions">
+            <button type="button" className="btn btn--ghost" onClick={() => setEdit(null)}>Отмена</button>
+            <button className="btn btn--primary">Сохранить</button>
+          </div>
+        </form>
+      ) : editable && (
+        <button className="link" onClick={() => setEdit({ delivery_method: order.delivery_method, delivery_address: order.delivery_address || '', comment: order.comment || '' })}>
+          Изменить получение и комментарий
+        </button>
+      )}
 
       <h3>Покупатель</h3>
       <dl className="specs specs--stack">
@@ -149,7 +188,7 @@ export default function Orders() {
             </table>
           </div>
         )}
-        {selected && <OrderPanel order={selected} onClose={() => setSelectedId(null)} onChanged={onChanged} />}
+        {selected && <OrderPanel key={selected.id} order={selected} onClose={() => setSelectedId(null)} onChanged={onChanged} />}
       </div>
     </div>
   )

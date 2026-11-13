@@ -60,11 +60,11 @@ export default function Checkout() {
             <div className="choice">
               <label className={`choice__opt ${method === 'pickup' ? 'is-on' : ''}`}>
                 <input type="radio" name="method" value="pickup" checked={method === 'pickup'} onChange={() => setMethod('pickup')} />
-                <HomeIcon /><span><b>Самовывоз</b><small>Душанбе, пр. Рудаки, 12 · бесплатно</small></span>
+                <HomeIcon /><span><b>Самовывоз</b><small>Худжанд, ул. Камоли Худжанди, 12 · бесплатно</small></span>
               </label>
               <label className={`choice__opt ${method === 'delivery' ? 'is-on' : ''}`}>
                 <input type="radio" name="method" value="delivery" checked={method === 'delivery'} onChange={() => setMethod('delivery')} />
-                <TruckIcon /><span><b>Доставка</b><small>Курьером по Душанбе за 2 часа</small></span>
+                <TruckIcon /><span><b>Доставка</b><small>Курьером по Худжанду за 2 часа</small></span>
               </label>
             </div>
           </fieldset>
@@ -72,7 +72,7 @@ export default function Checkout() {
           {method === 'delivery' && (
             <label className="field">
               <span>Адрес доставки *</span>
-              <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Например: Душанбе, ул. Айни, 5, кв. 12" required />
+              <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Например: Худжанд, ул. Ленина, 5, кв. 12" required />
             </label>
           )}
           <label className="field">

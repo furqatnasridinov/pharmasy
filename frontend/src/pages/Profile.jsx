@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ordersApi } from '../api'
 import { errorMessage } from '../api/client'
 import { useAuth } from '../context/AuthContext'
@@ -7,7 +7,8 @@ import { useToast } from '../context/ToastContext'
 import { formatDate, formatPrice, initials } from '../utils/format'
 
 export default function Profile() {
-  const { user, updateProfile } = useAuth()
+  const { user, updateProfile, logout } = useAuth()
+  const navigate = useNavigate()
   const toast = useToast()
   const [form, setForm] = useState({ full_name: user.full_name, phone: user.phone || '' })
   const [busy, setBusy] = useState(false)
@@ -42,6 +43,7 @@ export default function Profile() {
           <h1>{user.full_name}</h1>
           <p className="muted">{user.email} · с нами с {formatDate(user.created_at)}</p>
         </div>
+        <button className="btn btn--line profile__logout" onClick={() => { logout(); navigate('/') }}>Выйти</button>
       </div>
 
       {stats && (

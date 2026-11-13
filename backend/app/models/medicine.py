@@ -15,6 +15,7 @@ class Medicine(Base):
     description: Mapped[str | None] = mapped_column(Text)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
     manufacturer: Mapped[str | None] = mapped_column(String(255))
+    country: Mapped[str | None] = mapped_column(String(100))
     active_substance: Mapped[str | None] = mapped_column(String(255))
     form: Mapped[str] = mapped_column(String(60))           # таблетки, сироп, мазь...
     dosage: Mapped[str | None] = mapped_column(String(60))  # "500 мг"

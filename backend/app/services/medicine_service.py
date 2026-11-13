@@ -14,6 +14,36 @@ FINAL_PRICE = Medicine.price * (100 - Medicine.discount_percent) / 100.0
 
 SORTS = {"price_asc", "price_desc", "name", "rating", "newest", "discount"}
 
+# Группы форм выпуска для фильтра (как «Форма выпуска» на сайтах аптек).
+# Порядок важен: инъекции проверяются раньше, чем «раствор» и «порошок».
+FORM_GROUPS: dict[str, tuple[str, ...]] = {
+    "Инъекции": ("%инъекц%",),
+    "Таблетки": ("таблетки%",),
+    "Капсулы": ("капсулы%",),
+    "Драже": ("драже%",),
+    "Сироп": ("сироп%",),
+    "Суспензия": ("суспензия%",),
+    "Капли": ("капли%",),
+    "Спрей": ("спрей%", "аэрозоль%"),
+    "Мазь": ("мазь%",),
+    "Крем": ("крем%",),
+    "Гель": ("гель%",),
+    "Порошок": ("порошок%", "гранулы%"),
+    "Раствор": ("раствор%",),
+    "Свечи": ("суппозитории%",),
+    "Паста": ("паста%",),
+}
+
+
+def form_group(form: str) -> str:
+    f = (form or "").lower()
+    for group, patterns in FORM_GROUPS.items():
+        for pat in patterns:
+            core = pat.strip("%")
+            if (pat.startswith("%") and core in f) or (not pat.startswith("%") and f.startswith(core)):
+                return group
+    return "Другое"
+
 
 def expiry_status(expiry: date) -> str:
     today = date.today()
@@ -33,6 +63,7 @@ def to_out(med: Medicine, rating: float | None = None, reviews_count: int = 0) -
         category_id=med.category_id,
         category_name=med.category.name if med.category else "",
         manufacturer=med.manufacturer,
+        country=med.country,
         active_substance=med.active_substance,
         form=med.form,
         dosage=med.dosage,
@@ -96,6 +127,10 @@ def list_medicines(
     in_stock: bool = False,
     on_sale: bool = False,
     otc_only: bool = False,
+    manufacturers: list[str] | None = None,
+    forms: list[str] | None = None,
+    substance: str | None = None,
+    exclude_id: int | None = None,
     sort: str = "name",
     page: int = 1,
     page_size: int = 12,
@@ -127,6 +162,17 @@ def list_medicines(
         query = query.where(Medicine.discount_percent > 0)
     if otc_only:
         query = query.where(Medicine.requires_prescription.is_(False))
+    if manufacturers:
+        query = query.where(Medicine.manufacturer.in_(manufacturers))
+    if forms:
+        patterns = [p for f in forms for p in FORM_GROUPS.get(f, ())]
+        if patterns:
+            query = query.where(or_(*[func.py_lower(Medicine.form).like(p) for p in patterns]))
+    if substance:
+        # «Показать аналоги»: то же действующее вещество
+        query = query.where(func.py_lower(Medicine.active_substance) == substance.strip().lower())
+    if exclude_id:
+        query = query.where(Medicine.id != exclude_id)
 
     order_by = {
         "price_asc": [FINAL_PRICE.asc()],
@@ -191,3 +237,31 @@ def bestsellers(db: Session, limit: int = 8) -> list[MedicineOut]:
         select(Medicine).options(joinedload(Medicine.category)).where(Medicine.id.in_(ids))
     ).unique()}
     return to_out_many(db, [meds[i] for i in ids if i in meds])
+
+
+def facets(db: Session, *, category_id: int | None = None, search: str | None = None) -> dict:
+    """Значения для фильтров каталога с количеством препаратов."""
+    query = select(Medicine.manufacturer, Medicine.form, FINAL_PRICE)
+    if category_id:
+        query = query.where(Medicine.category_id == category_id)
+    if search:
+        pattern = f"%{search.strip().lower()}%"
+        query = query.where(or_(func.py_lower(Medicine.name).like(pattern),
+                                func.py_lower(Medicine.active_substance).like(pattern)))
+    rows = db.execute(query).all()
+    makers: dict[str, int] = {}
+    groups: dict[str, int] = {}
+    prices = []
+    for maker, form, price in rows:
+        if maker:
+            makers[maker] = makers.get(maker, 0) + 1
+        g = form_group(form)
+        groups[g] = groups.get(g, 0) + 1
+        prices.append(float(price))
+    order = list(FORM_GROUPS) + ["Другое"]
+    return {
+        "manufacturers": [{"name": k, "count": v} for k, v in sorted(makers.items(), key=lambda kv: (-kv[1], kv[0]))],
+        "forms": [{"name": k, "count": groups[k]} for k in order if k in groups],
+        "price_min": min(prices) if prices else 0,
+        "price_max": max(prices) if prices else 0,
+    }

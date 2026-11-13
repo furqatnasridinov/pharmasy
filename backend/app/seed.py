@@ -1,21 +1,21 @@
 """Тестовые данные. Выполняется при старте, если в базе нет пользователей."""
 import random
+import shutil
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import hash_password
-from app.models import Category, Medicine, Order, OrderItem, OrderStatus, Promotion, Review, User
+from app.models import Category, Medicine, Order, OrderItem, OrderStatus, Promotion, Review, User, Banner
 from app.seed_data import (
     ADDRESSES, ADMIN, CATEGORIES, CUSTOMERS, DEALS_OF_DAY, DISCOUNTS, EXPIRED, EXPIRING,
-    LOW_STOCK, MAIN_USER, MEDICINES, OUT_OF_STOCK, REVIEW_TEXTS,
+    LOW_STOCK, MAIN_USER, MANUFACTURER_COUNTRY, MEDICINES, OUT_OF_STOCK, REVIEW_TEXTS,
 )
-from app.seed_images import write_image
-
-SEED_IMAGE_DIR = "seed"
+from app.seed_photos import medicine_photo_url
 
 
 def seed_if_empty(db: Session) -> None:
@@ -59,7 +59,6 @@ def _seed_categories(db: Session) -> dict[str, Category]:
 
 def _seed_medicines(db: Session, categories: dict[str, Category], rnd: random.Random) -> dict[str, Medicine]:
     today = date.today()
-    image_dir = settings.upload_path / SEED_IMAGE_DIR
     result: dict[str, Medicine] = {}
     created = datetime.now() - timedelta(days=90)
 
@@ -88,17 +87,15 @@ def _seed_medicines(db: Session, categories: dict[str, Category], rnd: random.Ra
             )
             med = Medicine(
                 name=name, description=description, category_id=categories[cat_name].id, manufacturer=maker,
+                country=MANUFACTURER_COUNTRY.get(maker), image_url=medicine_photo_url(name),
                 active_substance=substance, form=form, dosage=dosage, package=package,
                 price=Decimal(str(price)), stock=stock, expiry_date=expiry, requires_prescription=rx,
                 discount_percent=DISCOUNTS.get(name, 0), is_deal_of_day=name in DEALS_OF_DAY,
                 created_at=created + timedelta(hours=len(result) * 13),
             )
             db.add(med)
-            db.flush()
-            filename = f"medicine-{med.id}.svg"
-            write_image(image_dir, filename, name=name, form=form, dosage=dosage, package=package, category=cat_name)
-            med.image_url = f"/uploads/{SEED_IMAGE_DIR}/{filename}"
             result[name] = med
+    db.flush()
     return result
 
 
@@ -114,9 +111,63 @@ def _seed_promotions(db: Session, categories: dict[str, Category]) -> None:
                   category_id=categories["Витамины"].id,
                   starts_at=today - timedelta(days=5), ends_at=today + timedelta(days=32)),
         Promotion(title="Бесплатная доставка", theme="blue",
-                  description="Для заказов от 200 смн по всему Душанбе.",
+                  description="Для заказов от 200 смн по всему Худжанду.",
                   starts_at=today - timedelta(days=60), ends_at=None),
     ])
+
+
+# Фото демо-баннеров лежат в репозитории (seed_assets/banners, источники — в CREDITS.md)
+# и при старте копируются в папку загрузок, чтобы раздаваться как обычные /uploads/...
+BANNER_ASSETS = Path(__file__).parent / "seed_assets" / "banners"
+BANNER_UPLOAD_SUBDIR = "seed-banners"
+
+DEMO_BANNERS = [
+    dict(title="Бесплатная доставка от 200 смн", subtitle="Курьер привезёт заказ по Худжанду за 2 часа",
+         link_url="/catalog", placement="slider", theme="teal", sort_order=1, photo="delivery.jpg"),
+    dict(title="Сезон простуды: −20%", subtitle="Скидка на средства от простуды, гриппа и капли для носа",
+         link_url="/catalog?on_sale=true", placement="slider", theme="blue", sort_order=2, photo="cold.jpg"),
+    dict(title="Витамины: вторая упаковка в подарок", subtitle="Витамин D3, Компливит и омега-3",
+         link_url="/catalog", placement="slider", theme="amber", sort_order=3, photo="vitamins.jpg"),
+    dict(title="Товары дня", subtitle="Скидки до полуночи", link_url="/#deals",
+         placement="side", theme="amber", sort_order=1, photo="deals.jpg"),
+    dict(title="Самовывоз бесплатно", subtitle="ул. Камоли Худжанди, 12 · 8:00–22:00", link_url="/#delivery",
+         placement="side", theme="blue", sort_order=2, photo="pickup.jpg"),
+]
+
+
+def _install_banner_photo(filename: str) -> str | None:
+    """Копирует фото из seed_assets в uploads (если ещё нет) и возвращает его URL."""
+    src = BANNER_ASSETS / filename
+    if not src.is_file():
+        return None
+    dest_dir = settings.upload_path / BANNER_UPLOAD_SUBDIR
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / filename
+    if not dest.exists():
+        shutil.copyfile(src, dest)
+    return f"/uploads/{BANNER_UPLOAD_SUBDIR}/{filename}"
+
+
+def seed_banners_if_empty(db: Session) -> None:
+    """Демо-баннеры для главной; добавляются и в уже существующую базу, если таблица пуста.
+
+    Демо-баннеры без картинки (созданные прошлой версией) получают фото по заголовку.
+    Баннеры, которые админ создал или которым загрузил свою картинку, не трогаются.
+    """
+    if not db.scalar(select(Banner.id).limit(1)):
+        for item in DEMO_BANNERS:
+            data = {k: v for k, v in item.items() if k != "photo"}
+            db.add(Banner(**data, image_url=_install_banner_photo(item["photo"]), show_text=True))
+        db.commit()
+        return
+
+    photos = {item["title"]: item["photo"] for item in DEMO_BANNERS}
+    for banner in db.scalars(select(Banner).where(Banner.image_url.is_(None), Banner.title.in_(photos))):
+        banner.image_url = _install_banner_photo(photos[banner.title])
+    # Файлы могли пропасть из uploads (например, папку data очистили) — восстанавливаем
+    for item in DEMO_BANNERS:
+        _install_banner_photo(item["photo"])
+    db.commit()
 
 
 def _seed_reviews(db: Session, users: list[User], medicines: dict[str, Medicine], rnd: random.Random) -> None:

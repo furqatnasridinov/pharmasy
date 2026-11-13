@@ -1,8 +1,20 @@
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { errorMessage } from '../api/client'
+import { LogoMark } from '../components/Logo'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
+
+/**
+ * Куда вести после входа. Страница, с которой отправили на вход, могла остаться от другого
+ * пользователя (покупатель вышел на /orders/5, а вошёл админ) — поэтому учитываем роль:
+ * админ попадает в панель (или на нужную страницу панели), покупатель — никогда не в /admin.
+ */
+function targetAfterLogin(user, from) {
+  const toAdmin = from.startsWith('/admin')
+  if (user.role === 'admin') return toAdmin ? from : '/admin'
+  return toAdmin ? '/' : from
+}
 
 export default function Login() {
   const { user, login } = useAuth()
@@ -14,7 +26,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  if (user) return <Navigate to={from} replace />
+  if (user) return <Navigate to={targetAfterLogin(user, from)} replace />
 
   const submit = async (e) => {
     e.preventDefault()
@@ -23,7 +35,7 @@ export default function Login() {
     try {
       const u = await login(form.email.trim(), form.password)
       toast.show(`Здравствуйте, ${u.full_name.split(' ')[0]}!`)
-      navigate(u.role === 'admin' && from === '/' ? '/admin' : from, { replace: true })
+      navigate(targetAfterLogin(u, from), { replace: true })
     } catch (err) {
       setError(errorMessage(err))
     } finally {
@@ -35,6 +47,7 @@ export default function Login() {
 
   return (
     <div className="auth-page">
+      <Link to="/" className="auth-page__logo" aria-label="На главную"><LogoMark size={36} /><span>Darmon</span></Link>
       <form className="auth-card" onSubmit={submit}>
         <h1>Вход</h1>
         <p className="muted">Войдите, чтобы оформить заказ и следить за его статусом.</p>
@@ -55,6 +68,7 @@ export default function Login() {
           <button type="button" className="link" onClick={() => fill('admin@pharmacy.local', 'admin123')}>Администратор</button>
         </div>
       </form>
+      <Link to="/" className="auth-page__back">← Вернуться в аптеку</Link>
     </div>
   )
 }

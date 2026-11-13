@@ -5,12 +5,14 @@ import Header from './components/Header'
 import { Loader } from './components/States'
 import { useAuth } from './context/AuthContext'
 import AdminLayout from './pages/admin/AdminLayout'
+import AdminBanners from './pages/admin/Banners'
 import AdminCategories from './pages/admin/Categories'
 import AdminDashboard from './pages/admin/Dashboard'
 import AdminMedicines from './pages/admin/Medicines'
 import AdminOrders from './pages/admin/Orders'
 import AdminPromotions from './pages/admin/Promotions'
 import AdminReviews from './pages/admin/Reviews'
+import AdminUsers from './pages/admin/Users'
 import Cart from './pages/Cart'
 import Catalog from './pages/Catalog'
 import Checkout from './pages/Checkout'
@@ -33,28 +35,36 @@ function RequireAuth({ children, admin = false }) {
   return children
 }
 
-/** Гость видит лендинг, вошедший пользователь — сразу каталог. */
+/** Главная: покупателям и гостям — витрина, администратора сразу ведём в панель управления. */
 function Home() {
-  const { user, loading } = useAuth()
+  const { loading, isAdmin } = useAuth()
   if (loading) return <Loader />
-  return user ? <Catalog /> : <Landing />
+  return isAdmin ? <Navigate to="/admin" replace /> : <Landing />
 }
 
+/** При смене страницы — наверх; ссылки вида /#delivery прокручивают к нужному блоку. */
 function ScrollToTop() {
-  const { pathname } = useLocation()
-  useEffect(() => { window.scrollTo(0, 0) }, [pathname])
+  const { pathname, hash } = useLocation()
+  useEffect(() => {
+    if (!hash) { window.scrollTo(0, 0); return undefined }
+    const t = setTimeout(() => document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth' }), 300)
+    return () => clearTimeout(t)
+  }, [pathname, hash])
   return null
 }
 
 export default function App() {
   const { pathname } = useLocation()
   const inAdmin = pathname.startsWith('/admin')
+  // Вход и регистрация — отдельный экран без шапки и подвала сайта
+  const isAuth = pathname === '/login' || pathname === '/register'
+  const bare = inAdmin || isAuth
 
   return (
     <>
       <ScrollToTop />
-      {!inAdmin && <Header />}
-      <main className={inAdmin ? '' : 'main'}>
+      {!bare && <Header />}
+      <main className={bare ? '' : 'main'}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/catalog" element={<Catalog />} />
@@ -73,12 +83,14 @@ export default function App() {
             <Route path="medicines" element={<AdminMedicines />} />
             <Route path="categories" element={<AdminCategories />} />
             <Route path="promotions" element={<AdminPromotions />} />
+            <Route path="banners" element={<AdminBanners />} />
             <Route path="reviews" element={<AdminReviews />} />
+            <Route path="users" element={<AdminUsers />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
-      {!inAdmin && <Footer />}
+      {!bare && <Footer />}
     </>
   )
 }
