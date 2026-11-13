@@ -199,9 +199,9 @@ def _order(db, user, status, items, *, days_ago, method="pickup", address=None, 
 def _seed_orders(db: Session, users: list[User], m: dict[str, Medicine], rnd: random.Random) -> None:
     main = users[0]
     S = OrderStatus
-    # Заказы основного пользователя (Алишер Рахимов) — во всех статусах
+    # Заказы основного пользователя (Мадина Рахимова) — во всех статусах
     _order(db, main, S.COMPLETED, [(m["Цетрин"], 1), (m["Компливит"], 1), (m["Но-шпа"], 2)], days_ago=21)
-    _order(db, main, S.CANCELLED, [(m["Арбидол"], 1)], days_ago=9, comment="Передумал, купил в другой аптеке")
+    _order(db, main, S.CANCELLED, [(m["Арбидол"], 1)], days_ago=9, comment="Передумала, купила в другой аптеке")
     _order(db, main, S.READY, [(m["Терафлю Экстра"], 2), (m["Називин"], 1), (m["Цетрин"], 1)], days_ago=0,
            method="delivery", address=ADDRESSES[0], comment="Позвоните за 10 минут")
     _order(db, main, S.NEW, [(m["Парацетамол"], 2), (m["Смекта"], 1)], days_ago=0)

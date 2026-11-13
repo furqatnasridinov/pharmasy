@@ -45,8 +45,8 @@ docker compose up --build
 ## Тестовые аккаунты
 | Роль | Email | Пароль |
 |---|---|---|
-| Администратор (Фирдавс Каримов) | `admin@pharmacy.local` | `admin123` |
-| Покупатель (Алишер Рахимов) | `user@pharmacy.local` | `user123` |
+| Администратор (Ойишабону Солиева) | `admin@pharmacy.local` | `admin123` |
+| Покупатель (Мадина Рахимова) | `user@pharmacy.local` | `user123` |
 | Другие покупатели | `madina@`, `rustam@`, `nigina@`… `@pharmacy.local` | `user123` |
 
 На странице входа есть кнопки, которые подставляют тестовый аккаунт.

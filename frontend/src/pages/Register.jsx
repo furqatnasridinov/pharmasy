@@ -41,7 +41,7 @@ export default function Register() {
         <h1>Регистрация</h1>
         <p className="muted">Аккаунт нужен для заказов, избранного и отзывов.</p>
         <label className="field"><span>ФИО</span>
-          <input required minLength={2} autoComplete="name" value={form.full_name} onChange={set('full_name')} placeholder="Алишер Рахимов" />
+          <input required minLength={2} autoComplete="name" value={form.full_name} onChange={set('full_name')} placeholder="Мадина Рахимова" />
         </label>
         <label className="field"><span>Телефон</span>
           <input type="tel" autoComplete="tel" value={form.phone} onChange={set('phone')} placeholder="+992 90 000-00-00" />
